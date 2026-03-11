@@ -4,6 +4,7 @@ import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
 import permissionsRoutes from './routes/permissions.js';
 import auditRoutes from './routes/audit.js';
+import rolesRoutes from './routes/roles.js';
 import { config } from './config.js';
 import { connectDatabase } from './db.js';
 
@@ -27,6 +28,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/permissions', permissionsRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/roles', rolesRoutes);
 
 // Error handling
 app.use((err: any, req: any, res: any, next: any) => {

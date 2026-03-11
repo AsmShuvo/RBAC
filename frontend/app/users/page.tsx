@@ -10,6 +10,8 @@ export default function UsersPage() {
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [formData, setFormData] = useState({
     email: "",
     username: "",
@@ -21,9 +23,24 @@ export default function UsersPage() {
 
   useEffect(() => {
     if (token) {
+      fetchRoles();
       fetchUsers();
     }
   }, [token]);
+
+  const fetchRoles = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/roles`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRoles(data);
+      }
+    } catch (error) {
+      console.error("Error fetching roles:", error);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -41,6 +58,15 @@ export default function UsersPage() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    // Validate form
+    if (!formData.email || !formData.username || !formData.password || !formData.roleId) {
+      setError("All required fields must be filled");
+      return;
+    }
+
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
         method: "POST",
@@ -52,11 +78,19 @@ export default function UsersPage() {
       });
 
       if (response.ok) {
+        setSuccess("User created successfully!");
         setFormData({ email: "", username: "", password: "", firstName: "", lastName: "", roleId: "" });
-        setShowModal(false);
+        setTimeout(() => {
+          setShowModal(false);
+          setSuccess("");
+        }, 1500);
         fetchUsers();
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to create user");
       }
     } catch (error) {
+      setError("Error creating user. Please try again.");
       console.error("Error creating user:", error);
     }
   };
@@ -144,6 +178,18 @@ export default function UsersPage() {
             <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
               <h2 className="text-2xl font-bold text-slate-900 mb-6">Create New User</h2>
 
+              {error && (
+                <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+                  {error}
+                </div>
+              )}
+
+              {success && (
+                <div className="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
+                  {success}
+                </div>
+              )}
+
               <form onSubmit={handleCreateUser} className="space-y-4">
                 <input
                   type="email"
@@ -183,6 +229,20 @@ export default function UsersPage() {
                   onChange={e => setFormData({ ...formData, lastName: e.target.value })}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 />
+                
+                <select
+                  value={formData.roleId}
+                  onChange={e => setFormData({ ...formData, roleId: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  required
+                >
+                  <option value="">Select Role</option>
+                  {roles.map(role => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
 
                 <div className="flex gap-4">
                   <button
