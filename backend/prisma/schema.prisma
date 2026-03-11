@@ -1,0 +1,195 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Core user model
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  username  String   @unique
+  password  String
+  firstName String?
+  lastName  String?
+  role      Role     @relation(fields: [roleId], references: [id])
+  roleId    String
+  
+  // Status: active, suspended, banned
+  status    UserStatus @default(ACTIVE)
+  
+  // Manager relationship - only Agents/Customers have managers
+  manager   User?     @relation("ManagerToTeam", fields: [managerId], references: [id])
+  managerId String?
+  team      User[]    @relation("ManagerToTeam")
+  
+  // Permissions directly assigned to user
+  permissions UserPermission[]
+  
+  // Audit logs
+  actionsPerformed AuditLog[] @relation("ActorToAudit")
+  
+  // JWT refresh tokens for session management
+  refreshTokens RefreshToken[]
+  
+  // API keys if needed in future
+  apiKeys   ApiKey[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roleId])
+  @@index([managerId])
+  @@index([status])
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+// Core role model
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  
+  // Role hierarchy level for grant ceiling enforcement
+  level       Int      // 0 = Customer, 1 = Agent, 2 = Manager, 3 = Admin
+  
+  // Default permissions for this role
+  permissions RolePermission[]
+  
+  // Users with this role
+  users       User[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Permission atom - fine-grained access units
+model Permission {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  category     String   // e.g., "dashboard", "users", "leads", "reports", "audit", "settings"
+  resourceType String?  // e.g., "page", "action", "module"
+  
+  // Which roles have this permission by default
+  roles        RolePermission[]
+  
+  // Which users have been explicitly granted/denied this
+  users        UserPermission[]
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+}
+
+// Join table: Role -> Permissions (default permissions)
+model RolePermission {
+  id           String   @id @default(cuid())
+  role         Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleId       String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  permissionId String
+  
+  createdAt    DateTime @default(now())
+
+  @@unique([roleId, permissionId])
+}
+
+// Join table: User -> Permissions (override at user level)
+// granted = true means user has this permission (override default)
+// granted = false means user is denied this permission (revoke from default)
+model UserPermission {
+  id           String   @id @default(cuid())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  permissionId String
+  
+  // true = granted, false = explicitly denied
+  granted      Boolean  @default(true)
+  
+  grantedBy    String?  // user who granted/denied this
+  reason       String?  // why was this granted/denied
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([granted])
+}
+
+// Audit log - append-only record of all admin/manager actions
+model AuditLog {
+  id          String   @id @default(cuid())
+  actor       User     @relation("ActorToAudit", fields: [actorId], references: [id])
+  actorId     String
+  
+  action      String   // e.g., "CREATE_USER", "GRANT_PERMISSION", "SUSPEND_USER"
+  resourceType String  // e.g., "USER", "PERMISSION", "ROLE"
+  resourceId  String   // ID of the resource being acted upon
+  
+  changes     Json?    // Before/after values
+  reason      String?
+  
+  ipAddress   String?
+  userAgent   String?
+  
+  createdAt   DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([createdAt])
+}
+
+// Refresh token tracking for logout/session management
+model RefreshToken {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  
+  token     String   @unique
+  
+  // When it expires
+  expiresAt DateTime
+  
+  // When it was revoked (null = still valid)
+  revokedAt DateTime?
+  
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+// API Keys for future integrations
+model ApiKey {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  
+  key       String   @unique
+  name      String?
+  
+  revokedAt DateTime?
+  expiresAt DateTime?
+  
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([key])
+}
