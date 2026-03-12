@@ -9,6 +9,7 @@ import teamRoutes from './routes/team.js';
 import customerPortalRoutes from './routes/customer-portal.js';
 import { config } from './config.js';
 import { connectDatabase } from './db.js';
+import { execSync } from 'child_process';
 
 const app: Application = express();
 
@@ -48,6 +49,18 @@ app.use((err: any, req: any, res: any, next: any) => {
 // Start server
 async function startServer() {
   try {
+    // Run migrations in production
+    if (config.server.env === 'production') {
+      console.log('Running database migrations...');
+      try {
+        execSync('npx prisma migrate deploy', { stdio: 'inherit' });
+        console.log('✓ Migrations completed');
+      } catch (error) {
+        console.error('✗ Migration failed:', error);
+        process.exit(1);
+      }
+    }
+
     await connectDatabase();
     
     const server = app.listen(config.server.port, () => {
