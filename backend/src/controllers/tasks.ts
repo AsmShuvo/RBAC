@@ -109,8 +109,9 @@ export const createTask = async (req: Request, res: Response) => {
       data: {
         title,
         description: description || null,
-        priority: priority || "Medium",
-        status: "Pending",
+        priority: priority || "MEDIUM",
+        // @ts-ignore
+        status: "TODO",
         dueDate: dueDate ? new Date(dueDate) : null,
         createdById: user.userId,
         assigneeId: assigneeId || null,

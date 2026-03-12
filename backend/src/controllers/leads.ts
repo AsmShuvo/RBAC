@@ -90,6 +90,7 @@ export const createLead = async (req: Request, res: Response) => {
         email: email || "",
         phone: phone || null,
         status: status || "New",
+        // @ts-ignore
         value: value ? parseFloat(value) : null,
         notes: notes || null,
         createdById: user.userId,

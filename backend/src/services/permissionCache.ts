@@ -23,7 +23,7 @@ export const getCachedUserPermissions = async (userId: string): Promise<string[]
           }
         }
       },
-      userPermissions: {
+      permissions: {
         include: { permission: true }
       }
     }
@@ -33,10 +33,10 @@ export const getCachedUserPermissions = async (userId: string): Promise<string[]
     return [];
   }
 
-  const rolePerms = new Set(user.role.permissions.map(rp => rp.permission.name));
+  const rolePerms = new Set(user.role.permissions.map((rp: any) => rp.permission.name));
 
   // Apply user-specific overrides
-  user.userPermissions.forEach(up => {
+  user.permissions.forEach((up: any) => {
     if (up.granted) {
       rolePerms.add(up.permission.name);
     } else {

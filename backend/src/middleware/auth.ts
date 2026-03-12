@@ -6,6 +6,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: {
+        id: string;
         userId: string;
         email: string;
         role: string;
@@ -33,12 +34,16 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
       const freshPermissions = await getCachedUserPermissions(payload.userId);
       
       req.user = {
+        id: payload.userId,
         ...payload,
         permissions: freshPermissions.length > 0 ? freshPermissions : payload.permissions
       };
     } catch (dbError) {
       // Fallback to JWT permissions if DB/cache fails
-      req.user = payload;
+      req.user = {
+        id: payload.userId,
+        ...payload
+      };
     }
     
     req.token = token;

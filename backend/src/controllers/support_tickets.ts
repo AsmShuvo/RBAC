@@ -28,7 +28,7 @@ export const getTickets = async (req: Request, res: Response) => {
       tickets = await prisma.supportTicket.findMany({
         include: {
           customer: { select: { id: true, username: true, firstName: true, lastName: true, email: true } },
-          assignedTo: { select: { id: true, username: true, firstName: true, lastName: true } },
+          assignedAgent: { select: { id: true, username: true, firstName: true, lastName: true } },
         },
         orderBy: { createdAt: "desc" },
       });
@@ -36,11 +36,11 @@ export const getTickets = async (req: Request, res: Response) => {
       // Agent - can see tickets assigned to them
       tickets = await prisma.supportTicket.findMany({
         where: {
-          OR: [{ assignedToId: user.userId }],
+          OR: [{ assignedAgentId: user.userId }],
         },
         include: {
           customer: { select: { id: true, username: true, firstName: true, lastName: true, email: true } },
-          assignedTo: { select: { id: true, username: true, firstName: true, lastName: true } },
+          assignedAgent: { select: { id: true, username: true, firstName: true, lastName: true } },
         },
         orderBy: { createdAt: "desc" },
       });
@@ -50,7 +50,7 @@ export const getTickets = async (req: Request, res: Response) => {
         where: { customerId: user.userId },
         include: {
           customer: { select: { id: true, username: true, firstName: true, lastName: true, email: true } },
-          assignedTo: { select: { id: true, username: true, firstName: true, lastName: true } },
+          assignedAgent: { select: { id: true, username: true, firstName: true, lastName: true } },
         },
         orderBy: { createdAt: "desc" },
       });
@@ -86,15 +86,16 @@ export const createTicket = async (req: Request, res: Response) => {
 
     const ticket = await prisma.supportTicket.create({
       data: {
+        ticketNumber: `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         title,
         description,
-        priority: priority || "Medium",
-        status: "Open",
+        priority: priority || "NORMAL",
+        status: "OPEN",
         customerId: user.userId,
       },
       include: {
         customer: { select: { id: true, username: true, firstName: true, lastName: true, email: true } },
-        assignedTo: { select: { id: true, username: true, firstName: true, lastName: true } },
+        assignedAgent: { select: { id: true, username: true, firstName: true, lastName: true } },
       },
     });
 
@@ -109,7 +110,7 @@ export const updateTicket = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     const { id } = req.params;
-    const { title, description, status, priority, assignedToId } = req.body;
+    const { title, description, status, priority, assignedAgentId } = req.body;
 
     if (!user) {
       res.status(401).json({ error: "Not authenticated" });
@@ -149,11 +150,11 @@ export const updateTicket = async (req: Request, res: Response) => {
         ...(description && { description }),
         ...(status && dbUser.role.level >= 1 && { status }),
         ...(priority && dbUser.role.level >= 1 && { priority }),
-        ...(assignedToId !== undefined && dbUser.role.level >= 1 && { assignedToId: assignedToId || null }),
+        ...(assignedAgentId !== undefined && dbUser.role.level >= 1 && { assignedAgentId: assignedAgentId || null }),
       },
       include: {
         customer: { select: { id: true, username: true, firstName: true, lastName: true, email: true } },
-        assignedTo: { select: { id: true, username: true, firstName: true, lastName: true } },
+        assignedAgent: { select: { id: true, username: true, firstName: true, lastName: true } },
       },
     });
 
@@ -182,10 +183,10 @@ export const closeTicket = async (req: Request, res: Response) => {
 
     const updated = await prisma.supportTicket.update({
       where: { id },
-      data: { status: "Closed" },
+      data: { status: "CLOSED" },
       include: {
         customer: { select: { id: true, username: true, firstName: true, lastName: true, email: true } },
-        assignedTo: { select: { id: true, username: true, firstName: true, lastName: true } },
+        assignedAgent: { select: { id: true, username: true, firstName: true, lastName: true } },
       },
     });
 

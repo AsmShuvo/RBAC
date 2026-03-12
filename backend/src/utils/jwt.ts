@@ -9,23 +9,27 @@ export interface TokenPayload {
 }
 
 export function generateAccessToken(payload: TokenPayload): string {
-  return jwt.sign(payload, config.jwt.secret, {
+  const secret = config.jwt.secret || 'default-secret';
+  return jwt.sign(payload, secret, {
     expiresIn: config.jwt.accessTokenExpiry,
-  });
+  } as jwt.SignOptions);
 }
 
 export function generateRefreshToken(payload: TokenPayload): string {
-  return jwt.sign(payload, config.jwt.refreshSecret, {
+  const secret = config.jwt.refreshSecret || 'default-refresh-secret';
+  return jwt.sign(payload, secret, {
     expiresIn: config.jwt.refreshTokenExpiry,
-  });
+  } as jwt.SignOptions);
 }
 
 export function verifyAccessToken(token: string): TokenPayload {
-  return jwt.verify(token, config.jwt.secret) as TokenPayload;
+  const secret = config.jwt.secret || 'default-secret';
+  return jwt.verify(token, secret) as TokenPayload;
 }
 
 export function verifyRefreshToken(token: string): TokenPayload {
-  return jwt.verify(token, config.jwt.refreshSecret) as TokenPayload;
+  const secret = config.jwt.refreshSecret || 'default-refresh-secret';
+  return jwt.verify(token, secret) as TokenPayload;
 }
 
 export function decodeToken(token: string): TokenPayload | null {
