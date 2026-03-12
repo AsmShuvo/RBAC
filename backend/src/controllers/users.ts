@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db.js';
+import { invalidateUserPermissionsCache } from '../services/permissionCache.js';
 import { hashPassword } from '../utils/crypto.js';
 
 export async function listUsers(req: Request, res: Response): Promise<void> {
@@ -9,21 +10,61 @@ export async function listUsers(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        firstName: true,
-        lastName: true,
-        status: true,
-        role: { select: { name: true } },
-        createdAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
 
-    res.json(users);
+    const role = req.query.role as string;
+    const status = req.query.status as string;
+    const search = req.query.search as string;
+
+    const where: any = {};
+    
+    if (role) {
+      where.role = { name: role };
+    }
+    
+    if (status) {
+      where.status = status;
+    }
+    
+    if (search) {
+      where.OR = [
+        { email: { contains: search, mode: 'insensitive' } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          status: true,
+          role: { select: { name: true } },
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.user.count({ where })
+    ]);
+
+    res.json({
+      data: users,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
     console.error('List users error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -178,6 +219,10 @@ export async function updateUser(req: Request, res: Response): Promise<void> {
       },
     });
 
+    if (roleId) {
+      invalidateUserPermissionsCache(id);
+    }
+
     res.json({
       id: updatedUser.id,
       email: updatedUser.email,
@@ -265,6 +310,78 @@ export async function banUser(req: Request, res: Response): Promise<void> {
     res.json({ message: 'User banned', userId: id });
   } catch (error) {
     console.error('Ban user error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function restoreUser(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: { status: 'ACTIVE' },
+    });
+
+    // Log to audit
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user.userId,
+        action: 'RESTORE_USER',
+        resourceType: 'USER',
+        resourceId: id,
+        reason: reason || undefined,
+      },
+    });
+
+    res.json({ message: 'User restored', userId: id });
+  } catch (error) {
+    console.error('Restore user error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function deleteUser(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: { status: 'SUSPENDED' }, // Using suspend as soft delete according to requirements
+    });
+
+    // Revoke all refresh tokens
+    await prisma.refreshToken.updateMany({
+      where: { userId: id },
+      data: { revokedAt: new Date() },
+    });
+
+    // Log to audit
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user.userId,
+        action: 'DELETE_USER',
+        resourceType: 'USER',
+        resourceId: id,
+        reason: reason || undefined,
+      },
+    });
+
+    res.json({ message: 'User soft deleted', userId: id });
+  } catch (error) {
+    console.error('Delete user error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 }

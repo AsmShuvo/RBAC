@@ -3,6 +3,7 @@
 import { ProtectedRoute } from "@/app/components/protected-route";
 import { useAuth } from "@/app/context/auth";
 import { useEffect, useState } from "react";
+import api from '@/app/lib/api';
 
 export default function PermissionsPage() {
   const { token } = useAuth();
@@ -21,19 +22,13 @@ export default function PermissionsPage() {
   const fetchData = async () => {
     try {
       const [usersRes, permRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/permissions`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+        api.get('/users?limit=100'),
+        api.get('/permissions'),
       ]);
 
-      const usersData = await usersRes.json();
-      const permData = await permRes.json();
-
-      setUsers(usersData);
-      setPermissions(permData);
+      // /users returns paginated { data: [], meta: {} }
+      setUsers(usersRes.data.data ?? usersRes.data);
+      setPermissions(permRes.data);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -44,12 +39,8 @@ export default function PermissionsPage() {
   const handleSelectUser = async (userId: string) => {
     setSelectedUser(userId);
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/permissions/users/${userId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const data = await response.json();
-      setUserPermissions(data.details || []);
+      const res = await api.get(`/permissions/users/${userId}`);
+      setUserPermissions(res.data.details || []);
     } catch (error) {
       console.error("Error fetching user permissions:", error);
     }
@@ -57,14 +48,11 @@ export default function PermissionsPage() {
 
   const handleTogglePermission = async (permissionId: string, granted: boolean) => {
     try {
-      const method = granted ? "DELETE" : "POST";
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/permissions/users/${selectedUser}/${permissionId}`,
-        {
-          method,
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      if (granted) {
+        await api.delete(`/permissions/users/${selectedUser}/${permissionId}`);
+      } else {
+        await api.post(`/permissions/users/${selectedUser}/${permissionId}`, {});
+      }
       handleSelectUser(selectedUser);
     } catch (error) {
       console.error("Error toggling permission:", error);

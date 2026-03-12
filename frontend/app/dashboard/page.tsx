@@ -3,9 +3,10 @@
 import { ProtectedRoute } from "@/app/components/protected-route";
 import { useAuth } from "@/app/context/auth";
 import { useEffect, useState } from "react";
+import api from '@/app/lib/api';
 
 export default function DashboardPage() {
-  const { user, token } = useAuth();
+  const { user, token, permissions } = useAuth();
   const [stats, setStats] = useState({
     users: 0,
     permissions: 0,
@@ -15,35 +16,48 @@ export default function DashboardPage() {
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Check distinct permissions
+  const canViewStats = permissions.includes("view_stats") || permissions.includes("view_dashboard");
+
   useEffect(() => {
     if (token) {
-      fetchStats();
+      if (canViewStats) {
+        fetchStats();
+      } else {
+        setLoading(false);
+      }
     }
-  }, [token]);
+  }, [token, canViewStats]);
 
   const fetchStats = async () => {
     try {
-      const [usersRes, permRes, auditRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/permissions`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/audit?limit=5`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
+      // In a real app we'd have a specific /stats endpoint, but here we query components
+      // if the user has permission to see the dashboard, they might have access to some of these.
+      // We wrap in individual try/catches to avoid one 403 failing the whole dashboard fetch.
+      let usersData = { data: [] };
+      let permData = [];
+      let auditData = { total: 0, logs: [] };
 
-      const usersData = await usersRes.json();
-      const permData = await permRes.json();
-      const auditData = await auditRes.json();
+      try {
+        const res = await api.get('/users?limit=100');
+        usersData = res.data;
+      } catch (e) {}
+
+      try {
+        const res = await api.get('/permissions');
+        permData = res.data;
+      } catch (e) {}
+
+      try {
+        const res = await api.get('/audit?limit=5');
+        auditData = res.data;
+      } catch (e) {}
 
       setStats({
-        users: usersData.length || 0,
+        users: usersData.data?.length || 0,
         permissions: permData.length || 0,
         auditLogs: auditData.total || 0,
-        activeUsers: usersData.filter((u: any) => u.status === "ACTIVE").length || 0,
+        activeUsers: usersData.data?.filter((u: any) => u.status === "ACTIVE").length || 0,
       });
 
       setRecentLogs(auditData.logs || []);
@@ -60,51 +74,53 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-slate-900 mb-2">Dashboard</h1>
-          <p className="text-slate-600">Welcome back, {user?.email}</p>
+          <p className="text-slate-600">Welcome back, {user?.firstName || user?.email}</p>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-600 text-sm font-medium">Total Users</p>
-                <p className="text-4xl font-bold text-slate-900 mt-2">{stats.users}</p>
+        {canViewStats && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-600 text-sm font-medium">Total Users</p>
+                  <p className="text-4xl font-bold text-slate-900 mt-2">{stats.users}</p>
+                </div>
+                <div className="text-4xl">👥</div>
               </div>
-              <div className="text-4xl">👥</div>
             </div>
-          </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-600 text-sm font-medium">Permissions</p>
-                <p className="text-4xl font-bold text-slate-900 mt-2">{stats.permissions}</p>
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-600 text-sm font-medium">Permissions</p>
+                  <p className="text-4xl font-bold text-slate-900 mt-2">{stats.permissions}</p>
+                </div>
+                <div className="text-4xl">🔑</div>
               </div>
-              <div className="text-4xl">🔑</div>
             </div>
-          </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-600 text-sm font-medium">Active Users</p>
-                <p className="text-4xl font-bold text-slate-900 mt-2">{stats.activeUsers}</p>
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-600 text-sm font-medium">Active Users</p>
+                  <p className="text-4xl font-bold text-slate-900 mt-2">{stats.activeUsers}</p>
+                </div>
+                <div className="text-4xl">✓</div>
               </div>
-              <div className="text-4xl">✓</div>
             </div>
-          </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-600 text-sm font-medium">Audit Events</p>
-                <p className="text-4xl font-bold text-slate-900 mt-2">{stats.auditLogs}</p>
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-slate-600 text-sm font-medium">Audit Events</p>
+                  <p className="text-4xl font-bold text-slate-900 mt-2">{stats.auditLogs}</p>
+                </div>
+                <div className="text-4xl">📝</div>
               </div>
-              <div className="text-4xl">📝</div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Recent Activity */}
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">

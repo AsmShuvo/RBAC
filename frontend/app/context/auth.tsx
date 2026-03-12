@@ -1,7 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, createContext, useContext } from 'react';
+import api from '@/app/lib/api';
 
 interface AuthContextType {
   user: any;
@@ -12,7 +13,7 @@ interface AuthContextType {
   permissions: string[];
 }
 
-const AuthContext = require('react').createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState(null);
@@ -21,47 +22,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  const handleToken = (currentToken: string) => {
+    try {
+      const decoded = JSON.parse(atob(currentToken.split('.')[1]));
+      setUser(decoded);
+      setPermissions(decoded.permissions || []);
+      setToken(currentToken);
+    } catch (e) {
+      localStorage.removeItem('accessToken');
+    }
+  };
+
   useEffect(() => {
     const storedToken = localStorage.getItem('accessToken');
     if (storedToken) {
-      setToken(storedToken);
-      try {
-        const decoded = JSON.parse(atob(storedToken.split('.')[1]));
-        setUser(decoded);
-        setPermissions(decoded.permissions || []);
-      } catch (e) {
-        localStorage.removeItem('accessToken');
-      }
+      handleToken(storedToken);
     }
     setLoading(false);
+
+    // Listen for axios interceptor token refresh
+    const handleTokenRefresh = (e: any) => {
+      handleToken(e.detail);
+    };
+
+    window.addEventListener('tokenRefreshed', handleTokenRefresh as EventListener);
+    
+    return () => {
+      window.removeEventListener('tokenRefreshed', handleTokenRefresh as EventListener);
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      throw new Error('Login failed');
+    const response = await api.post('/auth/login', { email, password });
+    
+    if (response.data && response.data.accessToken) {
+      localStorage.setItem('accessToken', response.data.accessToken);
+      setToken(response.data.accessToken);
+      setUser(response.data.user);
+      setPermissions(response.data.user.permissions || []);
     }
-
-    const data = await response.json();
-    localStorage.setItem('accessToken', data.accessToken);
-    setToken(data.accessToken);
-    setUser(data.user);
-    setPermissions(data.user.permissions || []);
   };
 
   const logout = async () => {
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: 'include',
-      });
+      await api.post('/auth/logout');
     } catch (e) {
       // Silent fail
     }
@@ -80,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  const context = require('react').useContext(AuthContext);
+  const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within AuthProvider');
   }

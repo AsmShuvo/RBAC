@@ -2,7 +2,9 @@
 
 import { ProtectedRoute } from "@/app/components/protected-route";
 import { useAuth } from "@/app/context/auth";
+import { PermissionEditor } from "@/app/components/permissions/PermissionEditor";
 import { useEffect, useState } from "react";
+import api from '@/app/lib/api';
 
 export default function UsersPage() {
   const { token } = useAuth();
@@ -10,8 +12,15 @@ export default function UsersPage() {
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
   const [formData, setFormData] = useState({
     email: "",
     username: "",
@@ -24,19 +33,19 @@ export default function UsersPage() {
   useEffect(() => {
     if (token) {
       fetchRoles();
-      fetchUsers();
     }
   }, [token]);
 
+  useEffect(() => {
+    if (token) {
+      fetchUsers();
+    }
+  }, [token, page, search, roleFilter, statusFilter]);
+
   const fetchRoles = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/roles`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setRoles(data);
-      }
+      const response = await api.get('/roles');
+      setRoles(response.data);
     } catch (error) {
       console.error("Error fetching roles:", error);
     }
@@ -44,11 +53,19 @@ export default function UsersPage() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
-        headers: { Authorization: `Bearer ${token}` },
+      setLoading(true);
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: "10",
+        ...(search && { search }),
+        ...(roleFilter && { role: roleFilter }),
+        ...(statusFilter && { status: statusFilter }),
       });
-      const data = await response.json();
-      setUsers(data);
+      
+      const response = await api.get(`/users?${params.toString()}`);
+      
+      setUsers(response.data.data);
+      setTotalPages(response.data.meta.totalPages);
     } catch (error) {
       console.error("Error fetching users:", error);
     } finally {
@@ -96,14 +113,32 @@ export default function UsersPage() {
   };
 
   const handleSuspendUser = async (userId: string) => {
+    if (!confirm("Are you sure you want to suspend this user?")) return;
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${userId}/suspend`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.put(`/users/${userId}/suspend`);
       fetchUsers();
     } catch (error) {
       console.error("Error suspending user:", error);
+    }
+  };
+
+  const handleBanUser = async (userId: string) => {
+    if (!confirm("Are you sure you want to ban this user?")) return;
+    try {
+      await api.put(`/users/${userId}/ban`);
+      fetchUsers();
+    } catch (error) {
+      console.error("Error banning user:", error);
+    }
+  };
+
+  const handleRestoreUser = async (userId: string) => {
+    if (!confirm("Are you sure you want to restore this user?")) return;
+    try {
+      await api.put(`/users/${userId}/restore`);
+      fetchUsers();
+    } catch (error) {
+      console.error("Error restoring user:", error);
     }
   };
 
@@ -123,6 +158,39 @@ export default function UsersPage() {
               + Create User
             </button>
           )}
+        </div>
+
+        {/* Search and Filters */}
+        <div className="flex flex-wrap gap-4 mb-6">
+          <input
+            type="text"
+            placeholder="Search users by name or email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none flex-1 min-w-[250px]"
+          />
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            <option value="">All Roles</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.name}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            <option value="">All Statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="SUSPENDED">Suspended</option>
+            <option value="BANNED">Banned</option>
+          </select>
         </div>
 
         {/* Users Table */}
@@ -155,13 +223,34 @@ export default function UsersPage() {
                         {user.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm">
-                      {user.status === "ACTIVE" && (
+                    <td className="px-6 py-4 text-sm flex gap-3">
+                      <button
+                        className="text-blue-600 hover:text-blue-700 font-medium"
+                        onClick={() => setEditingUserId(user.id)}
+                      >
+                        Edit
+                      </button>
+                      {user.status === "ACTIVE" ? (
+                        <>
+                          <button
+                            onClick={() => handleSuspendUser(user.id)}
+                            className="text-orange-600 hover:text-orange-700 font-medium"
+                          >
+                            Suspend
+                          </button>
+                          <button
+                            onClick={() => handleBanUser(user.id)}
+                            className="text-red-600 hover:text-red-700 font-medium"
+                          >
+                            Ban
+                          </button>
+                        </>
+                      ) : (
                         <button
-                          onClick={() => handleSuspendUser(user.id)}
-                          className="text-orange-600 hover:text-orange-700 font-medium"
+                          onClick={() => handleRestoreUser(user.id)}
+                          className="text-green-600 hover:text-green-700 font-medium"
                         >
-                          Suspend
+                          Restore
                         </button>
                       )}
                     </td>
@@ -172,9 +261,33 @@ export default function UsersPage() {
           </div>
         </div>
 
+        {/* Pagination */}
+        <div className="flex justify-between items-center mt-6">
+          <div className="text-sm text-slate-600">
+            Page {page} of {totalPages}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-4 py-2 border border-slate-300 rounded-lg disabled:opacity-50 hover:bg-slate-50 transition font-medium"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-4 py-2 border border-slate-300 rounded-lg disabled:opacity-50 hover:bg-slate-50 transition font-medium"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
         {/* Create User Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            {/* Same modal code as before */}
             <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
               <h2 className="text-2xl font-bold text-slate-900 mb-6">Create New User</h2>
 
@@ -191,6 +304,7 @@ export default function UsersPage() {
               )}
 
               <form onSubmit={handleCreateUser} className="space-y-4">
+                {/* Inputs ... */}
                 <input
                   type="email"
                   placeholder="Email"
@@ -262,6 +376,18 @@ export default function UsersPage() {
               </form>
             </div>
           </div>
+        )}
+
+        {/* Permission Editor Modal */}
+        {editingUserId && (
+          <PermissionEditor
+            userId={editingUserId}
+            onClose={() => setEditingUserId(null)}
+            onSave={() => {
+              setEditingUserId(null);
+              fetchUsers(); // Refresh if necessary
+            }}
+          />
         )}
       </div>
     </ProtectedRoute>

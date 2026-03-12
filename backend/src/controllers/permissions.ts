@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db.js';
+import { invalidateUserPermissionsCache } from '../services/permissionCache.js';
 
 export async function listPermissions(req: Request, res: Response): Promise<void> {
   try {
@@ -154,6 +155,7 @@ export async function grantPermission(req: Request, res: Response): Promise<void
       },
     });
 
+    invalidateUserPermissionsCache(userId);
     res.json({
       message: 'Permission granted',
       userId,
@@ -212,6 +214,7 @@ export async function revokePermission(req: Request, res: Response): Promise<voi
       },
     });
 
+    invalidateUserPermissionsCache(userId);
     res.json({
       message: 'Permission revoked',
       userId,
@@ -220,6 +223,104 @@ export async function revokePermission(req: Request, res: Response): Promise<voi
     });
   } catch (error) {
     console.error('Revoke permission error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function bulkUpdateUserPermissions(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { userId } = req.params;
+    const { permissions, reason } = req.body; 
+
+    if (!Array.isArray(permissions)) {
+      res.status(400).json({ error: 'Permissions must be an array' });
+      return;
+    }
+
+    // Step 1: Grant Ceiling Enforcement
+    const permIds = permissions.map((p: any) => p.permissionId);
+    
+    const targetPermissions = await prisma.permission.findMany({
+      where: { id: { in: permIds } }
+    });
+
+    if (targetPermissions.length !== permIds.length) {
+      res.status(400).json({ error: 'One or more permission IDs are invalid' });
+      return;
+    }
+
+    // Check if the granter has each permission they are trying to grant
+    for (const tp of targetPermissions) {
+      if (!req.user.permissions.includes(tp.name)) {
+        res.status(403).json({ 
+          error: `Grant ceiling enforcement failed: You do not have the permission '${tp.name}' that you are attempting to grant or revoke.`
+        });
+        return;
+      }
+    }
+
+    // Check if user exists
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    // Step 2: Apply the permissions using a transaction
+    await prisma.$transaction(async (tx) => {
+      for (const p of permissions) {
+        await tx.userPermission.upsert({
+          where: {
+            userId_permissionId: {
+              userId,
+              permissionId: p.permissionId,
+            },
+          },
+          update: {
+            granted: p.granted,
+            grantedBy: req.user!.userId,
+            reason: reason || undefined,
+          },
+          create: {
+            userId,
+            permissionId: p.permissionId,
+            granted: p.granted,
+            grantedBy: req.user!.userId,
+            reason: reason || undefined,
+          },
+        });
+      }
+
+      // Log to audit once for the bulk operation
+      await tx.auditLog.create({
+        data: {
+          actorId: req.user!.userId,
+          action: 'BULK_UPDATE_PERMISSIONS',
+          resourceType: 'USER_PERMISSION',
+          resourceId: userId,
+          changes: {
+            permissionsUpdated: permissions,
+          },
+          reason: reason || undefined,
+        },
+      });
+    });
+
+    invalidateUserPermissionsCache(userId);
+    res.json({
+      message: 'Permissions updated successfully',
+      userId,
+    });
+  } catch (error) {
+    console.error('Bulk update permissions error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 }
