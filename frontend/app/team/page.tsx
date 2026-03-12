@@ -12,6 +12,7 @@ interface TeamMember {
   lastName: string;
   status: string;
   role: { name: string };
+  permissions?: any[];
   createdAt: string;
 }
 

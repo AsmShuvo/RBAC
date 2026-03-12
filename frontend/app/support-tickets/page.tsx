@@ -7,12 +7,13 @@ import Swal from "sweetalert2";
 
 interface SupportTicket {
   id: string;
-  subject: string;
+  ticketNumber: string;
+  title: string;
   description: string;
   priority: string;
   status: string;
   customer?: { id: string; username: string; firstName?: string; lastName?: string };
-  assignee?: { id: string; username: string; firstName?: string; lastName?: string };
+  assignedAgent?: { id: string; username: string; firstName?: string; lastName?: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -274,7 +275,7 @@ export default function SupportTicketsPage() {
                         </td>
                       )}
                       <td className="px-6 py-4 text-sm text-slate-600">
-                        {ticket.assignee ? getUserName(ticket.assignee) : "-"}
+                        {ticket.assignedAgent ? getUserName(ticket.assignedAgent) : "-"}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span
