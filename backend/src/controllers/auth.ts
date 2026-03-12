@@ -273,3 +273,66 @@ export async function register(req: Request, res: Response): Promise<void> {
     res.status(500).json({ error: 'Internal server error' });
   }
 }
+
+export async function getCurrentUser(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      include: {
+        role: {
+          include: {
+            permissions: {
+              include: { permission: true },
+            },
+          },
+        },
+        permissions: {
+          include: { permission: true },
+        },
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    if (user.status !== 'ACTIVE') {
+      res.status(403).json({ error: `User is ${user.status.toLowerCase()}` });
+      return;
+    }
+
+    const rolePermissions = new Set(
+      user.role.permissions.map(rp => rp.permission.name)
+    );
+    
+    user.permissions.forEach(up => {
+      if (up.granted) {
+        rolePermissions.add(up.permission.name);
+      } else {
+        rolePermissions.delete(up.permission.name);
+      }
+    });
+    
+    const permissions = Array.from(rolePermissions);
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role.name,
+        permissions,
+      },
+    });
+  } catch (error) {
+    console.error('Get current user error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}

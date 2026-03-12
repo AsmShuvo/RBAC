@@ -50,11 +50,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = localStorage.getItem('accessToken');
       if (token) {
         try {
-          // Decode token to get fresh permissions
-          const decoded = JSON.parse(atob(token.split('.')[1]));
-          setUser(decoded);
-          setPermissions(decoded.permissions || []);
-          window.dispatchEvent(new CustomEvent('permissionsRefreshed', { detail: decoded }));
+          const response = await api.get('/auth/me');
+          if (response.data && response.data.user) {
+            const userData = response.data.user;
+            setUser(userData);
+            setPermissions(userData.permissions || []);
+            window.dispatchEvent(new CustomEvent('permissionsRefreshed', { detail: userData }));
+          }
         } catch (e) {
           console.error('Error refreshing permissions:', e);
         }
@@ -63,6 +65,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     window.addEventListener('tokenRefreshed', handleTokenRefresh as EventListener);
     window.addEventListener('permissionsUpdated', handlePermissionsUpdated as EventListener);
+    
+    window.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        handlePermissionsUpdated();
+      }
+    });
     
     return () => {
       window.removeEventListener('tokenRefreshed', handleTokenRefresh as EventListener);

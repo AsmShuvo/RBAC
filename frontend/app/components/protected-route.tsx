@@ -1,12 +1,46 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/context/auth';
+import api from '@/app/lib/api';
 
 export function ProtectedRoute({ children, requiredPermission }: { children: React.ReactNode; requiredPermission: string }) {
   const router = useRouter();
   const { token, permissions, loading } = useAuth();
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!loading && token) {
+      const validateAccess = async () => {
+        try {
+          const response = await api.get('/auth/me');
+          const currentPermissions = response.data?.user?.permissions || [];
+          
+          if (requiredPermission && !currentPermissions.includes(requiredPermission)) {
+            router.push('/403');
+            return;
+          }
+          
+          setHasAccess(true);
+        } catch (error) {
+          setHasAccess(false);
+          router.push('/login');
+        }
+      };
+
+      if (requiredPermission) {
+        validateAccess();
+      } else {
+        setHasAccess(true);
+      }
+
+      const interval = setInterval(validateAccess, 30000);
+      return () => clearInterval(interval);
+    } else if (!loading && !token) {
+      router.push('/login');
+    }
+  }, [token, loading, router, requiredPermission]);
 
   useEffect(() => {
     if (!loading) {
@@ -18,7 +52,7 @@ export function ProtectedRoute({ children, requiredPermission }: { children: Rea
     }
   }, [token, permissions, loading, router, requiredPermission]);
 
-  if (loading) {
+  if (loading || hasAccess === null) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -29,7 +63,7 @@ export function ProtectedRoute({ children, requiredPermission }: { children: Rea
     );
   }
 
-  if (!token) {
+  if (!token || hasAccess === false) {
     return null;
   }
 

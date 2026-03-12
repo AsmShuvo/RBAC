@@ -105,6 +105,7 @@ export default function PermissionsPage() {
 
       setSuccess('Permission granted successfully!');
       await refreshPermissions();
+      window.dispatchEvent(new Event('permissionsUpdated'));
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to grant permission');
@@ -122,6 +123,7 @@ export default function PermissionsPage() {
 
       setSuccess('Permission revoked successfully!');
       await refreshPermissions();
+      window.dispatchEvent(new Event('permissionsUpdated'));
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to revoke permission');
