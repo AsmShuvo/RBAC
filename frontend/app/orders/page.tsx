@@ -15,7 +15,7 @@ interface Order {
   updatedAt: string;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export default function OrdersPage() {
   const { permissions, user } = useAuth();
