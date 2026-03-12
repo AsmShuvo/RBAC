@@ -22,6 +22,228 @@ export async function listPermissions(req: Request, res: Response): Promise<void
   }
 }
 
+export async function listRolesWithPermissions(req: Request, res: Response): Promise<void> {
+  try {
+    const roles = await prisma.role.findMany({
+      include: {
+        permissions: {
+          include: { permission: true },
+        },
+        users: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: { level: 'desc' },
+    });
+
+    const formattedRoles = roles.map((role) => ({
+      id: role.id,
+      name: role.name,
+      description: role.description,
+      level: role.level,
+      permissionCount: role.permissions.length,
+      userCount: role.users.length,
+      permissions: role.permissions.map((rp) => ({
+        id: rp.permission.id,
+        name: rp.permission.name,
+        category: rp.permission.category,
+      })),
+      users: role.users,
+    }));
+
+    res.json(formattedRoles);
+  } catch (error) {
+    console.error('List roles with permissions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function grantPermissionToRole(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { roleId, permissionId } = req.params;
+    const { reason } = req.body;
+
+    // Check if role exists
+    const role = await prisma.role.findUnique({
+      where: { id: roleId },
+    });
+
+    if (!role) {
+      res.status(404).json({ error: 'Role not found' });
+      return;
+    }
+
+    // Check if permission exists
+    const permission = await prisma.permission.findUnique({
+      where: { id: permissionId },
+    });
+
+    if (!permission) {
+      res.status(404).json({ error: 'Permission not found' });
+      return;
+    }
+
+    // Create role permission if not exists
+    const rolePermission = await prisma.rolePermission.upsert({
+      where: {
+        roleId_permissionId: {
+          roleId,
+          permissionId,
+        },
+      },
+      update: {},
+      create: {
+        roleId,
+        permissionId,
+      },
+    });
+
+    // Invalidate cache for all users with this role
+    const usersWithRole = await prisma.user.findMany({
+      where: { roleId },
+      select: { id: true },
+    });
+
+    usersWithRole.forEach((user) => {
+      invalidateUserPermissionsCache(user.id);
+    });
+
+    // Log to audit
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user.userId,
+        action: 'GRANT_ROLE_PERMISSION',
+        resourceType: 'ROLE_PERMISSION',
+        resourceId: roleId,
+        changes: {
+          permissionId,
+          permissionName: permission.name,
+          roleName: role.name,
+          affectedUsers: usersWithRole.length,
+        },
+        reason: reason || undefined,
+      },
+    });
+
+    res.json({
+      message: 'Permission granted to role',
+      roleId,
+      roleName: role.name,
+      permissionId,
+      permissionName: permission.name,
+      affectedUsers: usersWithRole.length,
+    });
+  } catch (error) {
+    console.error('Grant permission to role error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function revokePermissionFromRole(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { roleId, permissionId } = req.params;
+    const { reason } = req.body;
+
+    // Check if role exists
+    const role = await prisma.role.findUnique({
+      where: { id: roleId },
+    });
+
+    if (!role) {
+      res.status(404).json({ error: 'Role not found' });
+      return;
+    }
+
+    // Check if permission exists
+    const permission = await prisma.permission.findUnique({
+      where: { id: permissionId },
+    });
+
+    if (!permission) {
+      res.status(404).json({ error: 'Permission not found' });
+      return;
+    }
+
+    const existingRolePermission = await prisma.rolePermission.findUnique({
+      where: {
+        roleId_permissionId: {
+          roleId,
+          permissionId,
+        },
+      },
+    });
+
+    if (!existingRolePermission) {
+      res.status(404).json({ error: 'This permission is not assigned to this role' });
+      return;
+    }
+
+    await prisma.rolePermission.delete({
+      where: {
+        roleId_permissionId: {
+          roleId,
+          permissionId,
+        },
+      },
+    });
+
+    // Invalidate cache for all users with this role
+    const usersWithRole = await prisma.user.findMany({
+      where: { roleId },
+      select: { id: true },
+    });
+
+    usersWithRole.forEach((user) => {
+      invalidateUserPermissionsCache(user.id);
+    });
+
+    // Log to audit
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user.userId,
+        action: 'REVOKE_ROLE_PERMISSION',
+        resourceType: 'ROLE_PERMISSION',
+        resourceId: roleId,
+        changes: {
+          permissionId,
+          permissionName: permission.name,
+          roleName: role.name,
+          affectedUsers: usersWithRole.length,
+        },
+        reason: reason || undefined,
+      },
+    });
+
+    res.json({
+      message: 'Permission revoked from role',
+      roleId,
+      roleName: role.name,
+      permissionId,
+      permissionName: permission.name,
+      affectedUsers: usersWithRole.length,
+    });
+  } catch (error) {
+    console.error('Revoke permission from role error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 export async function getUserPermissions(req: Request, res: Response): Promise<void> {
   try {
     const { userId } = req.params;

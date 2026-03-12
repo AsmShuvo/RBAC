@@ -1,237 +1,319 @@
-# Multi-Role RBAC Web Platform
+# RBAC System — Full-Stack Dynamic Permissions
 
-A dynamic permission-driven web platform where access is granted atom-by-atom, enabling Admins and Managers to customize user capabilities in real-time without code changes.
+A production-ready Role-Based Access Control system where permissions are fully dynamic and configurable at runtime, not hard-coded into the codebase.
 
-## 🎯 Project Overview
+## Overview
 
-Instead of hard-coding role access, this system provides:
-- **Dynamic Permission Routing**: Every page requires a permission atom; users see only what they're allowed
-- **Granular Access Control**: Admins and Managers configure permissions via UI
-- **Full Audit Trail**: Every action is logged with actor, timestamp, and changes
-- **Role Hierarchy**: Grant ceiling enforcement – you can't grant more than you have
-- **No Code Changes**: Restructure access entirely through the UI
+This is a multi-role web platform where **permissions drive everything** — what a user sees, what pages they can access, and what actions they can take. No page is locked to a specific role. Access is granted atom by atom, from Admin down to Manager, Manager down to Agent, and optionally to Customers.
 
-### User Roles
+### The Problem We Solve
 
-| Role | Capabilities |
-|------|---|
-| **Admin** | Complete system control – manage all users, assign managers, configure permissions |
-| **Manager** | Create/manage team (agents + customers), control feature access, suspend/ban users |
-| **Agent** | Work within assigned modules and features |
-| **Customer** | Self-service portal with restricted access |
+| Without This System | With This System |
+|---|---|
+| Role access is hard-coded | Any user can be granted access to any feature |
+| Adding permissions requires a developer | Admins/Managers configure permissions via UI |
+| Agents locked out of certain pages | Agents see exactly what their manager allows |
+| No audit trail | Full audit trail of every action |
+| Managers can't customize team capabilities | Managers control exactly which features each agent uses |
 
-## 📁 Project Structure
+## Who Uses It
 
-```
-rbac/
-├── backend/              # Express + TypeScript API
-│   ├── src/
-│   │   ├── index.ts      # Server entry point
-│   │   ├── config.ts     # Configuration
-│   │   ├── db.ts         # Prisma connection
-│   │   ├── middleware/   # Auth, permission middleware
-│   │   ├── controllers/  # Business logic
-│   │   ├── routes/       # API routes
-│   │   └── utils/        # JWT, crypto utilities
-│   ├── prisma/
-│   │   └── schema.prisma # Database schema
-│   ├── package.json
-│   └── tsconfig.json
-│
-└── frontend/             # Next.js + TypeScript UI
-    ├── app/
-    │   ├── layout.tsx    # Root layout
-    │   ├── page.tsx      # Home page
-    │   ├── login/        # Authentication pages
-    │   ├── register/
-    │   └── dashboard/    # Main app
-    ├── package.json
-    ├── tsconfig.json
-    └── tailwind.config.js
-```
+| Role | User Type | What They Need |
+|---|---|---|
+| **Admin** | Business Owner / IT Admin | Complete control. Manage all users, assign managers, configure the entire permission structure, and see full activity overview. |
+| **Manager** | Team Lead / Department Head | Create and manage their team (agents + customers). Control exactly which features each agent can use. Suspend or ban users within their scope. |
+| **Agent** | Staff / Operator | Work within modules their manager has unlocked. Could be managing leads, handling tasks, running reports — whatever they've been given access to. |
+| **Customer** | End Client / User | Access their own self-service portal. View tickets, orders, or interactions. Cannot see internal operations unless explicitly granted. |
 
-## 🚀 Getting Started
+## Key Features
+
+### 1. Dynamic Permission Routing
+Every page in the app has one required permission atom. If you have it, the page is accessible. If you don't, you're redirected to a 403 screen. Role label is irrelevant.
+
+### 2. Grant Ceiling Enforcement
+You cannot give more than you have. An Admin can grant any permission to any role. A Manager can only grant permissions they themselves possess.
+
+### 3. Role Hierarchy
+- **Admin (Level 3)** — All permissions
+- **Manager (Level 2)** — Everything except audit logs and role management
+- **Agent (Level 1)** — Basic operational permissions (leads, tasks, reports)
+- **Customer (Level 0)** — Self-service portal only
+
+### 4. Real-Time Permission Updates
+Permission changes take effect immediately without requiring users to log out using event-based updates and permission cache invalidation.
+
+### 5. Full Audit Trail
+Every admin/manager action is logged with actor, timestamp, and what changed.
+
+### 6. Team Management
+Managers can create and manage team members, control which features each agent can access, and suspend or ban users within their scope.
+
+### 7. Dynamic Sidebar Navigation
+The navigation menu is built at runtime from the user's resolved permission set.
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | Next.js 14 (App Router) + TypeScript |
+| **Backend** | Express.js + TypeScript |
+| **Database** | PostgreSQL + Prisma ORM |
+| **Auth** | JWT + Refresh Tokens |
+| **Styling** | Tailwind CSS |
+
+## Installation & Setup
 
 ### Prerequisites
 - Node.js 18+
+- PostgreSQL 14+
 - npm or yarn
-- PostgreSQL database
 
-### 1. Backend Setup
+### Backend Setup
 
 ```bash
 cd backend
 
-# Copy .env
-cp .env.example .env
-
-# Update DATABASE_URL in .env with your Neon PostgreSQL connection
-
-# Install dependencies
 npm install
 
-# Generate Prisma client
-npm run prisma:generate
+cp .env.example .env
+# Update DATABASE_URL and JWT_SECRET in .env
 
-# Run migrations
-npm run prisma:migrate
+npm run db:push
 
-# Start development server
+npm run seed
+
 npm run dev
 ```
 
-The backend will run on `http://localhost:5000`
+**Demo Credentials:**
+- Admin: `admin@rbac.local` / `admin123`
+- Manager: `manager@rbac.local` / `manager123`
+- Agent: `agent@rbac.local` / `agent123`
 
-### 2. Frontend Setup
+### Frontend Setup
 
 ```bash
 cd frontend
 
-# Copy .env
-cp .env.example .env
-
-# Install dependencies
 npm install
 
-# Start development server
+cp .env.example .env.local
+# Update NEXT_PUBLIC_API_URL to backend URL
+
 npm run dev
 ```
 
-The frontend will run on `http://localhost:3000`
+Access the app at `http://localhost:3000`
 
-## 📊 Database Schema
+## Core Entities
 
-### Core Tables
+### User
+Email, username, password, first/last name, role, status (ACTIVE, SUSPENDED, BANNED), custom permissions
 
-- **User**: User accounts with role and hierarchical relationships
-- **Role**: System roles (Admin, Manager, Agent, Customer) with hierarchy levels
-- **Permission**: Fine-grained access atoms (page access, actions, modules)
-- **RolePermission**: Default permissions for each role
-- **UserPermission**: User-level permission overrides (grant/deny)
-- **AuditLog**: Append-only record of all admin/manager actions
-- **RefreshToken**: Session management and logout tracking
-- **ApiKey**: Future API integrations
+### Role
+Name, description, level (0-3), permissions collection, users collection
 
-### Permission Architecture
+### Permission
+Name, category, description, resource type (page/action)
 
-Permissions are **atomic units** – users have exactly the permissions they need, no more. The grant ceiling ensures:
+### RolePermission
+Links roles to permissions (many-to-many)
 
-```
-Admin can grant anything
-  ↓
-Manager can grant only what Admin gave them
-  ↓
-Agent works only within granted permissions
-```
+### UserPermission
+User-specific permission overrides (grant/revoke beyond role)
 
-## 🔐 Authentication Flow
+### AuditLog
+Actor, action, resource, changes, timestamp, reason
 
-1. **Login**: Email + password → JWT access token (15 min) + refresh token (7 days, httpOnly)
-2. **Access Token**: Stored in memory, included in Authorization header
-3. **Refresh Token**: httpOnly cookie, used to get new access tokens
-4. **Logout**: Refresh token revoked in database, session blacklist enforced
-
-## 🛡️ Key Features
-
-### ✅ In Scope
-- Auth system (login, logout, JWT refresh, session management)
-- User CRUD (create, edit, suspend, ban)
-- Permission management UI with grant ceiling enforcement
-- Dynamic routing (Next.js middleware for permission checks)
-- Dynamic sidebar (nav items built from resolved permissions)
-- Core modules (Dashboard, Users, Leads, Tasks, Reports, Audit)
-- Audit trail (append-only log of all actions)
-- Role hierarchy enforcement
-
-### ⏳ Coming Soon
-- Figma UI implementation
-- Permission UI visual editor
-- Customer portal
-- Advanced reporting
-- 2FA/MFA support
-- API key management
-
-## 📝 API Endpoints
+## API Endpoints
 
 ### Authentication
-- `POST /api/auth/register` - Create new user
-- `POST /api/auth/login` - Login
-- `POST /api/auth/refresh` - Refresh access token
-- `POST /api/auth/logout` - Logout
+- `POST /auth/login`
+- `POST /auth/logout`
+- `POST /auth/refresh`
 
-### Users (Protected)
-- `GET /api/users` - List users
-- `POST /api/users` - Create user
-- `GET /api/users/:id` - Get user details
-- `PATCH /api/users/:id` - Update user
-- `POST /api/users/:id/suspend` - Suspend user
-- `POST /api/users/:id/ban` - Ban user
+### Users
+- `GET /users`
+- `POST /users`
+- `GET /users/:userId`
+- `PUT /users/:userId`
+- `DELETE /users/:userId`
+- `PUT /users/:userId/suspend`
+- `PUT /users/:userId/ban`
 
-### Permissions (Protected)
-- `GET /api/permissions` - List permissions
-- `GET /api/users/:id/permissions` - Get user's permissions
-- `POST /api/users/:id/permissions/:permId` - Grant permission
-- `DELETE /api/users/:id/permissions/:permId` - Revoke permission
+### Permissions
+- `GET /permissions`
+- `GET /permissions/roles/list`
+- `POST /permissions/roles/:roleId/:permissionId`
+- `DELETE /permissions/roles/:roleId/:permissionId`
+- `GET /permissions/users/:userId`
+- `POST /permissions/users/:userId/:permissionId`
+- `DELETE /permissions/users/:userId/:permissionId`
+
+### Team Management
+- `GET /team`
+- `POST /team`
+- `PATCH /team/:id`
+- `PUT /team/:id/suspend`
+- `PUT /team/:id/ban`
+- `POST /team/:id/features`
 
 ### Audit
-- `GET /api/audit` - Get audit logs
+- `GET /audit`
 
-## 🔧 Development Commands
+### Business Operations
+- `GET /leads`, `POST /leads`, `PUT /leads/:id`, `DELETE /leads/:id`
+- `GET /tasks`, `POST /tasks`, `PUT /tasks/:id`, `DELETE /tasks/:id`
+- `GET /customer-portal/tickets`, `POST /customer-portal/tickets`
+- `GET /customer-portal/orders`
 
-### Backend
-```bash
-npm run dev              # Start dev server with auto-reload
-npm run build           # Build TypeScript
-npm run start           # Run production build
-npm run prisma:migrate  # Create/apply migrations
-npm run prisma:studio   # Open Prisma Studio GUI
-npm run lint            # Run ESLint
+## Permission Categories
+
+**Dashboard:** view_dashboard
+
+**User Management:** view_users, create_user, edit_user, delete_user, suspend_user, ban_user
+
+**Permissions:** view_permissions, manage_permissions, manage_role_permissions
+
+**Team:** manage_team, create_team_member, edit_team_member, manage_team_features, suspend_team_member, ban_team_member
+
+**Leads:** view_leads, create_lead, edit_lead, delete_lead
+
+**Tasks:** view_tasks, create_task, edit_task, delete_task, assign_task
+
+**Reports:** view_reports, export_reports
+
+**Audit:** view_audit_log
+
+**Customer:** view_customer_portal, view_own_tickets, create_support_ticket, view_support_tickets, view_orders
+
+**Settings:** view_settings, edit_settings
+
+## Protected Routes
+
+- `/dashboard` — view_dashboard
+- `/users` — view_users
+- `/permissions` — view_permissions
+- `/team` — manage_team
+- `/leads` — view_leads
+- `/tasks` — view_tasks
+- `/reports` — view_reports
+- `/audit` — view_audit_log
+- `/support-tickets` — view_support_tickets
+- `/customer` — view_customer_portal
+
+## Project Structure
+
+```
+rbac/
+├── backend/
+│   ├── src/
+│   │   ├── controllers/     # Business logic
+│   │   ├── routes/          # API endpoints
+│   │   ├── middleware/      # Auth and permission checks
+│   │   ├── services/        # Permission cache, utilities
+│   │   ├── utils/           # Crypto, JWT helpers
+│   │   ├── db.ts            # Prisma client
+│   │   ├── config.ts        # Configuration
+│   │   └── index.ts         # Server entry point
+│   ├── prisma/
+│   │   ├── schema.prisma    # Database schema
+│   │   ├── seed.ts          # Seed script
+│   │   └── migrations/      # Database migrations
+│   └── package.json
+│
+├── frontend/
+│   ├── app/
+│   │   ├── components/      # Reusable components
+│   │   ├── context/         # Auth context, state
+│   │   ├── lib/             # API client, utilities
+│   │   ├── (pages)/         # Next.js pages
+│   │   ├── layout.tsx       # Root layout
+│   │   └── globals.css      # Global styles
+│   ├── middleware.ts        # Route protection
+│   ├── package.json
+│   └── tailwind.config.js
+│
+└── README.md
 ```
 
-### Frontend
+## Security Measures
+
+- JWT tokens with 15-minute expiration
+- Refresh tokens in httpOnly cookies (7 days)
+- Password hashing with bcrypt
+- Rate limiting on auth endpoints
+- Grant ceiling enforcement
+- Full audit trail
+- Role-based request validation
+
+## Database Migrations
+
 ```bash
-npm run dev      # Start dev server
-npm run build    # Build for production
-npm run start    # Run production build
-npm run lint     # Run ESLint
+cd backend
+
+# Create new migration
+npx prisma migrate dev --name migration_name
+
+# Apply migrations
+npx prisma migrate deploy
+
+# Reset (development only)
+npx prisma migrate reset
 ```
 
-## 📦 Tech Stack
+## Environment Variables
 
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | Next.js 14, TypeScript, Tailwind CSS, Zustand |
-| **Backend** | Express, TypeScript, Prisma ORM |
-| **Database** | PostgreSQL (Neon) |
-| **Auth** | JWT + Refresh Tokens, httpOnly cookies |
-| **Security** | bcrypt password hashing, CORS, rate limiting (TODO) |
+**Backend (.env)**
+```
+DATABASE_URL=postgresql://user:password@localhost:5432/rbac
+JWT_SECRET=your-secret-key
+JWT_REFRESH_SECRET=your-refresh-secret
+NODE_ENV=production
+PORT=5000
+```
 
-## 🐛 Troubleshooting
+**Frontend (.env.local)**
+```
+NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+```
 
-### Database Connection Failed
-- Verify `DATABASE_URL` in `.env`
-- Check PostgreSQL is running and accessible
-- Run `npx prisma migrate deploy` to sync schema
+## Building for Production
 
-### Auth Errors
-- Ensure `.env` has valid `JWT_SECRET` and `JWT_REFRESH_SECRET`
-- Check cookies are enabled and secure in production
+Backend:
+```bash
+cd backend
+npm run build
+npm start
+```
 
-### CORS Issues
-- Verify `FRONTEND_URL` in backend `.env`
-- Check frontend `NEXT_PUBLIC_API_URL` matches backend URL
+Frontend:
+```bash
+cd frontend
+npm run build
+npm start
+```
 
-## 📄 License
+## Troubleshooting
 
-MIT
+**Admin gets "Insufficient Permissions" error:**
+- Ensure database is seeded: `npm run seed`
+- Verify admin has `manage_role_permissions` permission
 
-## 👥 Contributing
+**Permissions not updating in real-time:**
+- Check event listeners are attached
+- Verify permission cache TTL settings
 
-1. Create feature branch: `git checkout -b feature/your-feature`
-2. Commit changes: `git commit -m 'Add feature'`
-3. Push to branch: `git push origin feature/your-feature`
-4. Open Pull Request
+**Routes not protected:**
+- Check middleware.ts configuration
+- Verify permission names match frontend/backend
+- Ensure token is sent in Authorization header
 
----
+**Team member can't access features:**
+- Verify feature permissions are granted to role
+- Confirm manager is granting features correctly
+- Check permission cache is invalidated
 
-**Questions?** Check the documentation or open an issue.
+## License
+
+Proprietary — Digital Pylot

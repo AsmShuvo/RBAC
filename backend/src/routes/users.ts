@@ -13,7 +13,6 @@ import { authMiddleware, permissionMiddleware } from '../middleware/auth.js';
 
 const router = Router();
 
-// All user routes require authentication
 router.use(authMiddleware);
 
 router.get('/', listUsers);

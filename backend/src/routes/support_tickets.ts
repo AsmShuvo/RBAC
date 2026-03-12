@@ -4,7 +4,6 @@ import { getTickets, createTicket, updateTicket, closeTicket } from "../controll
 
 const router = Router();
 
-// Protect all routes with authentication
 router.use(authMiddleware);
 
 // GET /api/support-tickets - Get all tickets

@@ -45,10 +45,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       handleToken(e.detail);
     };
 
+    // Listen for permission updates from other tabs/components
+    const handlePermissionsUpdated = async () => {
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        try {
+          // Decode token to get fresh permissions
+          const decoded = JSON.parse(atob(token.split('.')[1]));
+          setUser(decoded);
+          setPermissions(decoded.permissions || []);
+          window.dispatchEvent(new CustomEvent('permissionsRefreshed', { detail: decoded }));
+        } catch (e) {
+          console.error('Error refreshing permissions:', e);
+        }
+      }
+    };
+
     window.addEventListener('tokenRefreshed', handleTokenRefresh as EventListener);
+    window.addEventListener('permissionsUpdated', handlePermissionsUpdated as EventListener);
     
     return () => {
       window.removeEventListener('tokenRefreshed', handleTokenRefresh as EventListener);
+      window.removeEventListener('permissionsUpdated', handlePermissionsUpdated as EventListener);
     };
   }, []);
 

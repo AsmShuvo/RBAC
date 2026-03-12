@@ -4,7 +4,6 @@ import { getTasks, createTask, updateTask, deleteTask } from "../controllers/tas
 
 const router = Router();
 
-// Protect all routes with authentication
 router.use(authMiddleware);
 
 // GET /api/tasks - Get all tasks

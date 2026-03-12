@@ -4,7 +4,6 @@ import { getLeads, createLead, updateLead, deleteLead } from "../controllers/lea
 
 const router = Router();
 
-// Protect all routes with authentication
 router.use(authMiddleware);
 
 // GET /api/leads - Get all leads

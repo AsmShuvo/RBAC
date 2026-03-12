@@ -45,7 +45,7 @@ export default function SupportTicketsPage() {
   const fetchTickets = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/support-tickets", {
+      const response = await fetch("/api/customer-portal/tickets", {
         method: "GET",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -53,7 +53,7 @@ export default function SupportTicketsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setTickets(data);
+        setTickets(data.data || []);
       } else {
         await Swal.fire({
           icon: "error",
@@ -105,14 +105,14 @@ export default function SupportTicketsPage() {
     }
 
     try {
-      const response = await fetch("/api/support-tickets", {
+      const response = await fetch("/api/customer-portal/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          subject: formData.subject,
+          title: formData.subject,
           description: formData.description,
-          priority: formData.priority,
+          priority: formData.priority.toUpperCase(),
         }),
       });
 
@@ -166,11 +166,13 @@ export default function SupportTicketsPage() {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "High":
+      case "URGENT":
         return "bg-red-100 text-red-700";
-      case "Medium":
+      case "HIGH":
+        return "bg-orange-100 text-orange-700";
+      case "NORMAL":
         return "bg-yellow-100 text-yellow-700";
-      case "Low":
+      case "LOW":
         return "bg-green-100 text-green-700";
       default:
         return "bg-slate-100 text-slate-700";
@@ -179,15 +181,13 @@ export default function SupportTicketsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Open":
+      case "OPEN":
         return "bg-blue-100 text-blue-700";
-      case "In Progress":
+      case "IN_PROGRESS":
         return "bg-purple-100 text-purple-700";
-      case "On Hold":
-        return "bg-yellow-100 text-yellow-700";
-      case "Resolved":
+      case "RESOLVED":
         return "bg-green-100 text-green-700";
-      case "Closed":
+      case "CLOSED":
         return "bg-slate-100 text-slate-700";
       default:
         return "bg-slate-100 text-slate-700";
@@ -260,11 +260,11 @@ export default function SupportTicketsPage() {
                   {tickets.map((ticket) => (
                     <tr key={ticket.id} className="border-b border-slate-200 hover:bg-slate-50">
                       <td className="px-6 py-4 text-sm font-mono text-slate-600">
-                        #{ticket.id.slice(0, 8)}
+                        {ticket.ticketNumber}
                       </td>
                       <td className="px-6 py-4">
                         <div>
-                          <p className="text-sm font-medium text-slate-900">{ticket.subject}</p>
+                          <p className="text-sm font-medium text-slate-900">{ticket.title}</p>
                           <p className="text-xs text-slate-500 mt-1 truncate">{ticket.description}</p>
                         </div>
                       </td>

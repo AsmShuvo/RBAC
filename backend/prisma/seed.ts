@@ -115,6 +115,40 @@ async function main() {
       category: "customer",
       resourceType: "action",
     },
+    {
+      name: "view_support_tickets",
+      category: "customer",
+      resourceType: "page",
+    },
+    { name: "view_orders", category: "customer", resourceType: "page" },
+
+    // Team Management (for Managers)
+    { name: "manage_team", category: "team", resourceType: "page" },
+    {
+      name: "create_team_member",
+      category: "team",
+      resourceType: "action",
+    },
+    {
+      name: "edit_team_member",
+      category: "team",
+      resourceType: "action",
+    },
+    {
+      name: "manage_team_features",
+      category: "team",
+      resourceType: "action",
+    },
+    {
+      name: "suspend_team_member",
+      category: "team",
+      resourceType: "action",
+    },
+    {
+      name: "ban_team_member",
+      category: "team",
+      resourceType: "action",
+    },
   ];
 
   const createdPermissions = await Promise.all(
@@ -136,7 +170,7 @@ async function main() {
     permissionId: p.id,
   }));
 
-  // Manager: User management, leads, tasks, reports, but not audit or role management
+  // Manager: User management, leads, tasks, reports, team management, but not audit or role management
   const managerPermissions = createdPermissions
     .filter((p) => !["view_audit_log", "manage_role_permissions"].includes(p.name))
     .map((p) => ({

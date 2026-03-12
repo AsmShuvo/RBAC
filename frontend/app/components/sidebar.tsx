@@ -21,6 +21,9 @@ const sidebarItems: SidebarItem[] = [
   { label: 'Reports', href: '/reports', permission: 'view_reports', icon: '📈' },
   { label: 'Audit Log', href: '/audit', permission: 'view_audit_log', icon: '📝' },
   { label: 'Settings', href: '/settings', permission: 'view_settings', icon: '⚙️' },
+  { label: 'Team Management', href: '/team', permission: 'manage_team', icon: '👨‍💼' },
+  { label: 'Support Tickets', href: '/support-tickets', permission: 'view_support_tickets', icon: '🎫' },
+  { label: 'Orders', href: '/orders', permission: 'view_orders', icon: '📦' },
   { label: 'Customer Portal', href: '/customer', permission: 'view_customer_portal', icon: '🌐' },
 ];
 
@@ -29,6 +32,22 @@ export function Sidebar() {
   const { permissions, logout, user } = useAuth();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [, setRefresh] = useState(0);
+
+  useEffect(() => {
+    // Listen for permission updates
+    const handlePermissionsUpdated = () => {
+      setRefresh(prev => prev + 1);
+    };
+
+    window.addEventListener('permissionsUpdated', handlePermissionsUpdated as EventListener);
+    window.addEventListener('permissionsRefreshed', handlePermissionsUpdated as EventListener);
+
+    return () => {
+      window.removeEventListener('permissionsUpdated', handlePermissionsUpdated as EventListener);
+      window.removeEventListener('permissionsRefreshed', handlePermissionsUpdated as EventListener);
+    };
+  }, []);
 
   const visibleItems = sidebarItems.filter(item => permissions.includes(item.permission));
 
